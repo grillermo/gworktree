@@ -6,7 +6,7 @@
 
 gworktree() {
   local cdfile
-  cdfile=$(mktemp -t gworktree) || return 1
+  cdfile=$(mktemp "${TMPDIR:-/tmp}/gworktree.XXXXXX") || return 1
 
   GWORKTREE_CD_FILE=$cdfile command gworktree "$@"
   local ret=$?
