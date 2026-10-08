@@ -174,3 +174,81 @@ func commitIn(t *testing.T, path, file string) {
 		}
 	}
 }
+
+func branchExists(root, name string) bool {
+	return gitOK(root, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+}
+
+// A folder deleted by hand leaves git's record of the worktree behind; the
+// branch must still go, in both modes.
+func TestRemoveTakesTheBranchWhenTheFolderIsAlreadyGone(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		root := newRepo(t)
+		if err := create(root, "feat/nodir"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.RemoveAll(worktreePath(root, "feat/nodir")); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := removeOne(root, "main", "feat/nodir", force); err != nil {
+			t.Fatalf("force=%v: %v", force, err)
+		}
+		if branchExists(root, "feat/nodir") {
+			t.Fatalf("force=%v: the branch survived", force)
+		}
+		if isDir(filepath.Join(worktreesDir(root), "feat")) {
+			t.Fatalf("force=%v: the empty parent directory was left behind", force)
+		}
+	}
+}
+
+func TestRemoveTakesTheFolderWhenTheBranchIsAlreadyGone(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		root := newRepo(t)
+		if err := create(root, "nobranch"); err != nil {
+			t.Fatal(err)
+		}
+		path := worktreePath(root, "nobranch")
+		// A branch cannot be deleted while it is checked out.
+		if !gitOK(path, "checkout", "--detach") || !gitOK(root, "branch", "-D", "nobranch") {
+			t.Fatal("could not delete the branch out from under the worktree")
+		}
+
+		if err := removeOne(root, "main", "nobranch", force); err != nil {
+			t.Fatalf("force=%v: %v", force, err)
+		}
+		if isDir(path) {
+			t.Fatalf("force=%v: the worktree is still there", force)
+		}
+	}
+}
+
+// With --force, a folder whose .git link is broken is still cleared out.
+func TestRemoveForceTakesAFolderGitNoLongerRecognises(t *testing.T) {
+	root := newRepo(t)
+	if err := create(root, "broken"); err != nil {
+		t.Fatal(err)
+	}
+	path := worktreePath(root, "broken")
+	if err := os.Remove(filepath.Join(path, ".git")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeOne(root, "main", "broken", true); err != nil {
+		t.Fatal(err)
+	}
+	if isDir(path) {
+		t.Fatal("the folder is still there")
+	}
+	if branchExists(root, "broken") {
+		t.Fatal("the branch survived")
+	}
+}
+
+func TestRemoveFailsWhenNothingIsThere(t *testing.T) {
+	root := newRepo(t)
+	if err := removeOne(root, "main", "typo", true); err == nil {
+		t.Fatal("removing a name with no folder and no branch succeeded")
+	}
+}

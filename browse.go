@@ -73,7 +73,7 @@ func browse(root, filter string) error {
 		if err != nil {
 			return err
 		}
-		return removeOne(root, base, name, false)
+		return removeOne(root, base, name, true)
 	case "create":
 		return create(root, name)
 	}
@@ -94,7 +94,7 @@ func createName(filter string) (string, bool) {
 
 // browseActions are the buttons under the browse list. Each one only names what
 // the user picked; the git work happens back in browse, so a removal chosen
-// here takes exactly the same path as `gworktree remove <name>`.
+// here takes exactly the same path as `gworktree remove --force <name>`.
 func browseActions() []chicle.Action {
 	return []chicle.Action{
 		{
@@ -111,7 +111,7 @@ func browseActions() []chicle.Action {
 			// slash-heavy worktree name can end up cut off at the terminal edge,
 			// same as any other long line, but it can never wrap ugly.
 			Confirm: func(s chicle.Selection) string {
-				return fmt.Sprintf("Remove %q?", s.Cursor.Key)
+				return fmt.Sprintf("Force-remove %q and its branch?", s.Cursor.Key)
 			},
 			Run: func(s chicle.Selection) chicle.Outcome {
 				return chicle.Outcome{Result: "remove\t" + s.Cursor.Key, Done: true}

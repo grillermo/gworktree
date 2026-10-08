@@ -45,48 +45,85 @@ func removeCmd(root string, args []string) error {
 // merged into base. It assumes the primary working tree is already on that base
 // branch. With force set, the worktree goes even if it has modified or
 // untracked files and the branch goes even if it never landed.
+//
+// Either half may already be gone -- a folder deleted by hand, a branch deleted
+// with git -- and whatever is left is still removed. Only a name with neither a
+// folder nor a branch is an error, since that is most likely a typo.
 func removeOne(root, base, raw string, force bool) error {
 	name := trimName(raw)
 	path := worktreePath(root, name)
-	if !isDir(path) {
-		return fmt.Errorf("worktree %q not found at %s", name, path)
+	hasDir := isDir(path)
+	hasBranch := gitOK(root, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	if !hasDir && !hasBranch {
+		return fmt.Errorf("worktree %q not found: no folder at %s and no branch", name, path)
 	}
 
-	stepOutOf(root, path)
-
-	merged := isMerged(root, base, name)
-
-	if force {
-		// Drop the worktree along with any uncommitted work in it, and delete
-		// the branch whether or not it ever landed on base.
-		if err := gitRun(root, "worktree", "remove", "--force", path); err != nil {
-			return err
-		}
-		if err := gitRun(root, "branch", "-D", name); err != nil {
-			return err
-		}
-		pruneEmptyDirs(worktreesDir(root), filepath.Dir(path))
-		if merged {
-			fmt.Printf("✅ Removed worktree and branch %q.\n", name)
-		} else {
-			fmt.Printf("✅ Force-removed worktree and unmerged branch %q.\n", name)
-		}
-		return nil
+	if hasDir {
+		stepOutOf(root, path)
+	} else {
+		// A folder deleted by hand leaves git's record of the worktree behind,
+		// and that record keeps the branch checked out, so git would refuse to
+		// delete it.
+		gitOK(root, "worktree", "prune")
 	}
 
-	if !merged {
+	// Only a branch can hold unmerged work; with it gone there is nothing for
+	// the merge check to protect.
+	merged := !hasBranch || isMerged(root, base, name)
+	if !force && !merged {
 		return fmt.Errorf("⚠️  Branch %q is not merged into %s; leaving the worktree in place.\n"+
 			"    Force removal with: gworktree remove --force '%s'", name, base, name)
 	}
 
-	if err := gitRun(root, "worktree", "remove", path); err != nil {
-		return fmt.Errorf("%w\n    Retry with: gworktree remove --force '%s'", err, name)
+	if hasDir {
+		if err := removeDir(root, path, force); err != nil {
+			if force {
+				return err
+			}
+			return fmt.Errorf("%w\n    Retry with: gworktree remove --force '%s'", err, name)
+		}
 	}
-	if err := gitRun(root, "branch", "-d", name); err != nil {
-		return err
+	if hasBranch {
+		// -D drops the branch whether or not it ever landed on base.
+		flag := "-d"
+		if force {
+			flag = "-D"
+		}
+		if err := gitRun(root, "branch", flag, name); err != nil {
+			return err
+		}
 	}
 	pruneEmptyDirs(worktreesDir(root), filepath.Dir(path))
-	fmt.Printf("✅ Removed worktree and branch %q.\n", name)
+
+	switch {
+	case !hasDir:
+		fmt.Printf("✅ Removed branch %q; its worktree folder was already gone.\n", name)
+	case !hasBranch:
+		fmt.Printf("✅ Removed worktree %q; its branch was already gone.\n", name)
+	case !merged:
+		fmt.Printf("✅ Force-removed worktree and unmerged branch %q.\n", name)
+	default:
+		fmt.Printf("✅ Removed worktree and branch %q.\n", name)
+	}
+	return nil
+}
+
+// removeDir removes the worktree checked out at path. With force set, a folder
+// git no longer recognises as a worktree -- its .git link broken, say -- is
+// deleted outright rather than left behind: it sits under .worktrees, which
+// gworktree owns.
+func removeDir(root, path string, force bool) error {
+	if !force {
+		return gitRun(root, "worktree", "remove", path)
+	}
+	// Drop the worktree along with any uncommitted work in it.
+	if gitOK(root, "worktree", "remove", "--force", path) {
+		return nil
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return err
+	}
+	gitOK(root, "worktree", "prune")
 	return nil
 }
 

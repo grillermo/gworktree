@@ -22,7 +22,8 @@ branch off whatever HEAD happens to be. gworktree does not fetch; run
 `git fetch` yourself if you need the remote-tracking refs refreshed.
 
 Removal only takes branches already merged into `master`/`main`, unless you pass
-`--force`.
+`--force`. Removing from the browse menu always forces, after a confirm. If the
+worktree folder or the branch is already gone, whichever is left is still removed.
 
 ## Install
 
