@@ -28,7 +28,7 @@ worktree folder or the branch is already gone, whichever is left is still remove
 ## Install
 
 ```bash
-./rebuild
+./build
 ```
 
 Then one line in your zsh startup:
@@ -61,5 +61,5 @@ you where to `cd`.
 - `create.go` / `remove.go` — the git work each verb does.
 - `shell/gworktree.zsh` — the integration, embedded into the binary.
 
-The binary is git-ignored, so `./rebuild` only affects the local checkout.
+The binary is git-ignored, so `./build` only affects the local checkout.
 Source changes do nothing until it is rerun.
