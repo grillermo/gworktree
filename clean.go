@@ -64,7 +64,7 @@ func cleanPick(root, base string, worktrees []worktree) error {
 	}()
 
 	chosen, err := chicle.Run(chicle.Config{
-		Title:       "Clean up worktrees — space to tick, merged ones are pre-ticked",
+		Title:       "Clean up worktrees — enter to tick, tab for actions, merged ones are pre-ticked",
 		Columns:     columns(),
 		Rows:        rows(worktrees, false), // nothing is known to be merged yet
 		MultiSelect: true,
